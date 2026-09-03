@@ -49,8 +49,7 @@ def get_next_code():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton(f"🚗 Купить активацию — {PRICE} ₽", url=PRODAMUS_LINK)],
-        [InlineKeyboardButton("✅ Я оплатил — получить код", callback_data="get_code")],
+        [InlineKeyboardButton("✅ Получить код после оплаты", callback_data="get_code")],
     ]
     text = (
         "🚗 *Эвакуатор Трекер*\n\n"
@@ -63,7 +62,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Экспорт и импорт данных\n\n"
         f"🆓 *Бесплатно:* 10 записей\n"
         f"♾ *Полная версия:* {PRICE} ₽ — безлимит навсегда\n\n"
-        "Нажми кнопку ниже чтобы оплатить, затем вернись и нажми «Я оплатил»."
+        "Для оплаты напишите нам — мы пришлём реквизиты и выдадим код."
     )
     await update.message.reply_text(
         text, parse_mode="Markdown",
