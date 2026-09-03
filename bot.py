@@ -12,6 +12,10 @@ PRICE = 129
 USED_CODES_FILE = "used_codes.json"
 USER_CODES_FILE = "user_codes.json"
 
+# Реальные скриншоты инструкций (публичные изображения)
+IOS_STEP1_URL = "https://help.apple.com/assets/65D9B4B52D93F26A8B0A76DC/65D9B4B72D93F26A8B0A76E7/ru_RU/add-to-home-screen.png"
+ANDROID_STEP1_URL = "https://www.androidauthority.com/wp-content/uploads/2021/05/Chrome-add-to-home-screen-menu.jpg"
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -41,14 +45,25 @@ def get_unique_code():
             return code
     return None
 
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
+def main_keyboard():
+    return InlineKeyboardMarkup([
         [InlineKeyboardButton("🚗 Открыть приложение", url=APP_URL)],
         [InlineKeyboardButton("📲 Установить на телефон", callback_data="install")],
         [InlineKeyboardButton("🔑 Получить код активации", callback_data="get_code")],
         [InlineKeyboardButton("❓ Как активировать", callback_data="howto")],
-    ]
+    ])
+
+def back_to_install():
+    return InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="install")]])
+
+def back_to_main():
+    return InlineKeyboardMarkup([[InlineKeyboardButton("◀️ Назад", callback_data="back")]])
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Сохраняем id сообщений с картинками чтобы удалять при навигации
+    context.user_data['photo_msg_ids'] = []
+
     text = (
         "🚗 *Эвакуатор Трекер*\n\n"
         "Приложение для учёта перевозок и расходов.\n\n"
@@ -62,209 +77,155 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"♾ *Полная версия:* {PRICE} ₽ — безлимит навсегда\n\n"
         "Выбери действие 👇"
     )
-    await update.message.reply_text(
-        text, parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=main_keyboard())
+
+
+async def delete_photo_messages(context, chat_id):
+    """Удаляет сохранённые сообщения с картинками"""
+    for msg_id in context.user_data.get('photo_msg_ids', []):
+        try:
+            await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+        except:
+            pass
+    context.user_data['photo_msg_ids'] = []
 
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    chat_id = query.message.chat_id
 
-    if query.data == "install":
-        await install_menu(query)
-
-    elif query.data == "install_ios":
-        await install_ios(query)
-
-    elif query.data == "install_android":
-        await install_android(query)
-
-    elif query.data == "howto":
-        await howto(query)
-
-    elif query.data == "get_code":
-        await give_code(query)
-
-    elif query.data == "back":
-        keyboard = [
-            [InlineKeyboardButton("🚗 Открыть приложение", url=APP_URL)],
-            [InlineKeyboardButton("📲 Установить на телефон", callback_data="install")],
-            [InlineKeyboardButton("🔑 Получить код активации", callback_data="get_code")],
-            [InlineKeyboardButton("❓ Как активировать", callback_data="howto")],
-        ]
+    if query.data == "back":
+        await delete_photo_messages(context, chat_id)
         await query.edit_message_text(
             "Выбери действие 👇",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=main_keyboard()
         )
 
+    elif query.data == "install":
+        await delete_photo_messages(context, chat_id)
+        await query.edit_message_text(
+            "📲 *Установка приложения*\n\nВыбери свою систему:",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🍎 iPhone (Safari)", callback_data="install_ios")],
+                [InlineKeyboardButton("🤖 Android (Chrome)", callback_data="install_android")],
+                [InlineKeyboardButton("◀️ Назад", callback_data="back")],
+            ])
+        )
 
-async def install_menu(query):
-    keyboard = [
-        [InlineKeyboardButton("🍎 iPhone (Safari)", callback_data="install_ios")],
-        [InlineKeyboardButton("🤖 Android (Chrome)", callback_data="install_android")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="back")],
-    ]
-    await query.edit_message_text(
-        "📲 *Установка приложения*\n\n"
-        "Выбери свою систему:",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    elif query.data == "install_ios":
+        await delete_photo_messages(context, chat_id)
+        await query.edit_message_text(
+            "🍎 *Установка на iPhone*\n\n"
+            f"*1.* Открой в Safari: {APP_URL}\n\n"
+            "*2.* Нажми кнопку «Поделиться» внизу\n"
+            "_(квадрат со стрелкой ↑)_\n\n"
+            "*3.* Выбери «Добавить на экран «Домой»»\n\n"
+            "*4.* Нажми «Добавить» справа вверху\n\n"
+            "✅ Иконка появится на рабочем столе",
+            parse_mode="Markdown",
+            reply_markup=back_to_install()
+        )
+        # Отправляем гифку-инструкцию
+        try:
+            msg = await context.bot.send_animation(
+                chat_id=chat_id,
+                animation="https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExcDd4aHp6NHZtNm9rNm85NW50NnJtbzNheTNkcWo2NW96OHAzeHZlMSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/3o7aCXqfnpHhS0xG5i/giphy.gif",
+                caption="👆 Вот так выглядит кнопка «Поделиться» в Safari"
+            )
+            context.user_data.setdefault('photo_msg_ids', []).append(msg.message_id)
+        except:
+            # Если гифка не загрузилась — отправляем текстовое пояснение
+            msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text="👇 Кнопка «Поделиться» находится внизу экрана Safari — квадрат со стрелкой ↑"
+            )
+            context.user_data.setdefault('photo_msg_ids', []).append(msg.message_id)
 
+    elif query.data == "install_android":
+        await delete_photo_messages(context, chat_id)
+        await query.edit_message_text(
+            "🤖 *Установка на Android*\n\n"
+            f"*1.* Открой в Chrome: {APP_URL}\n\n"
+            "*2.* Нажми три точки ⋮ справа вверху\n\n"
+            "*3.* Выбери «Добавить на главный экран»\n\n"
+            "*4.* Нажми «Добавить» в окне\n\n"
+            "✅ Иконка появится на рабочем столе\n"
+            "Работает офлайн после первого открытия",
+            parse_mode="Markdown",
+            reply_markup=back_to_install()
+        )
+        try:
+            msg = await context.bot.send_photo(
+                chat_id=chat_id,
+                photo="https://www.androidauthority.com/wp-content/uploads/2021/05/Chrome-add-to-home-screen-menu.jpg",
+                caption="👆 Три точки ⋮ в правом верхнем углу Chrome → «Добавить на главный экран»"
+            )
+            context.user_data.setdefault('photo_msg_ids', []).append(msg.message_id)
+        except:
+            msg = await context.bot.send_message(
+                chat_id=chat_id,
+                text="👆 Три точки ⋮ в правом верхнем углу Chrome → «Добавить на главный экран»"
+            )
+            context.user_data.setdefault('photo_msg_ids', []).append(msg.message_id)
 
-async def install_ios(query):
-    keyboard = [[InlineKeyboardButton("◀️ Назад", callback_data="install")]]
+    elif query.data == "howto":
+        await delete_photo_messages(context, chat_id)
+        await query.edit_message_text(
+            "❓ *Как активировать полную версию*\n\n"
+            "*1.* Оплати 129 ₽ — напиши нам для реквизитов\n\n"
+            "*2.* Нажми «Получить код» в этом боте\n\n"
+            "*3.* Открой приложение → при выходе экрана лимита введи код\n\n"
+            "*4.* Готово — безлимит навсегда\n\n"
+            "⚠️ Один код = одно устройство",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔑 Получить код", callback_data="get_code")],
+                [InlineKeyboardButton("◀️ Назад", callback_data="back")],
+            ])
+        )
 
-    # Отправляем инструкцию текстом с эмодзи-шагами
-    text = (
-        "🍎 *Установка на iPhone*\n\n"
-        f"*Шаг 1.* Открой ссылку в Safari:\n{APP_URL}\n\n"
-        "*Шаг 2.* Нажми кнопку «Поделиться» внизу экрана\n"
-        "_(квадрат со стрелкой ↑)_\n\n"
-        "*Шаг 3.* Прокрути список вниз и выбери\n"
-        "«*Добавить на экран «Домой»*»\n\n"
-        "*Шаг 4.* Нажми «*Добавить*» в правом верхнем углу\n\n"
-        "✅ Готово! Иконка появится на рабочем столе.\n"
-        "Приложение работает как обычное — без браузерной строки и офлайн."
-    )
-    await query.edit_message_text(
-        text, parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    elif query.data == "get_code":
+        await delete_photo_messages(context, chat_id)
+        user_id = str(query.from_user.id)
+        user_codes = load_json(USER_CODES_FILE, {})
 
-    # Отправляем схему-инструкцию отдельным сообщением
-    chat_id = query.message.chat_id
-    await query.message.get_bot().send_message(
-        chat_id=chat_id,
-        text=(
-            "📋 *Где найти кнопку на iPhone:*\n\n"
-            "```\n"
-            "┌─────────────────────────┐\n"
-            "│  Safari                 │\n"
-            "│  inspiring-jalebi...    │\n"
-            "├─────────────────────────┤\n"
-            "│                         │\n"
-            "│   [страница открыта]    │\n"
-            "│                         │\n"
-            "├─────────────────────────┤\n"
-            "│  ◁  □  [⬆️]  □  □      │\n"
-            "│        ^^^              │\n"
-            "│   эта кнопка           │\n"
-            "└─────────────────────────┘\n"
-            "```\n"
-            "Затем: *Добавить на экран «Домой»* → *Добавить*"
-        ),
-        parse_mode="Markdown"
-    )
+        if user_id in user_codes:
+            code = user_codes[user_id]
+            await query.edit_message_text(
+                f"✅ *Твой код активации:*\n\n`{code}`\n\n"
+                "Введи в приложении в поле активации.\n"
+                "Код одноразовый — одно устройство.",
+                parse_mode="Markdown",
+                reply_markup=back_to_main()
+            )
+            return
 
+        code = get_unique_code()
+        if not code:
+            await query.edit_message_text("😔 Ошибка. Напиши нам — выдадим вручную.")
+            return
 
-async def install_android(query):
-    keyboard = [[InlineKeyboardButton("◀️ Назад", callback_data="install")]]
+        used = load_json(USED_CODES_FILE, [])
+        used.append(code)
+        save_json(USED_CODES_FILE, used)
+        user_codes[user_id] = code
+        save_json(USER_CODES_FILE, user_codes)
 
-    text = (
-        "🤖 *Установка на Android*\n\n"
-        f"*Шаг 1.* Открой ссылку в Chrome:\n{APP_URL}\n\n"
-        "*Шаг 2.* Нажми три точки ⋮ в правом верхнем углу\n\n"
-        "*Шаг 3.* Выбери «*Добавить на главный экран*»\n"
-        "_(или «Установить приложение»)_\n\n"
-        "*Шаг 4.* Нажми «*Добавить*» в появившемся окне\n\n"
-        "✅ Готово! Иконка появится на рабочем столе.\n"
-        "Приложение работает офлайн после первого открытия."
-    )
-    await query.edit_message_text(
-        text, parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-    chat_id = query.message.chat_id
-    await query.message.get_bot().send_message(
-        chat_id=chat_id,
-        text=(
-            "📋 *Где найти кнопку на Android:*\n\n"
-            "```\n"
-            "┌─────────────────────────┐\n"
-            "│  [←] inspiring-jale [⋮] │\n"
-            "│                    ^^^  │\n"
-            "│               эта кнопка│\n"
-            "├─────────────────────────┤\n"
-            "│                         │\n"
-            "│   [страница открыта]    │\n"
-            "│                         │\n"
-            "└─────────────────────────┘\n"
-            "```\n"
-            "Затем: *Добавить на главный экран* → *Добавить*"
-        ),
-        parse_mode="Markdown"
-    )
-
-
-async def howto(query):
-    keyboard = [
-        [InlineKeyboardButton("🔑 Получить код", callback_data="get_code")],
-        [InlineKeyboardButton("◀️ Назад", callback_data="back")],
-    ]
-    await query.edit_message_text(
-        "❓ *Как активировать полную версию*\n\n"
-        "*1.* Оплати 129 ₽ — напиши нам для получения реквизитов\n\n"
-        "*2.* Получи код активации здесь в боте\n\n"
-        "*3.* Открой приложение → когда выйдет экран лимита,\n"
-        "введи код в поле и нажми «Активировать»\n\n"
-        "*4.* Готово — безлимит навсегда на этом устройстве\n\n"
-        "⚠️ Один код = одно устройство\n"
-        "Код сохраняется даже если очистить кэш браузера",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-
-async def give_code(query):
-    user_id = str(query.from_user.id)
-    user_codes = load_json(USER_CODES_FILE, {})
-
-    if user_id in user_codes:
-        code = user_codes[user_id]
-        keyboard = [[InlineKeyboardButton("◀️ Назад", callback_data="back")]]
         await query.edit_message_text(
             f"✅ *Твой код активации:*\n\n`{code}`\n\n"
-            "Введи его в приложении в поле активации.\n"
-            "Код одноразовый — работает на одном устройстве.",
+            "Скопируй и введи в приложении в поле активации.\n"
+            "Код одноразовый — одно устройство.",
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=back_to_main()
         )
-        return
-
-    code = get_unique_code()
-    if not code:
-        await query.edit_message_text("😔 Ошибка. Напиши нам — выдадим код вручную.")
-        return
-
-    used = load_json(USED_CODES_FILE, [])
-    used.append(code)
-    save_json(USED_CODES_FILE, used)
-    user_codes[user_id] = code
-    save_json(USER_CODES_FILE, user_codes)
-
-    keyboard = [[InlineKeyboardButton("◀️ Назад", callback_data="back")]]
-    await query.edit_message_text(
-        f"✅ *Твой код активации:*\n\n`{code}`\n\n"
-        "Скопируй и введи в приложении в поле активации.\n"
-        "Код одноразовый — работает только на одном устройстве.",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
 
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🚗 Открыть приложение", url=APP_URL)],
-        [InlineKeyboardButton("📲 Установить на телефон", callback_data="install")],
-        [InlineKeyboardButton("🔑 Получить код активации", callback_data="get_code")],
-    ]
     await update.message.reply_text(
         "Нажми /start или выбери действие 👇",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=main_keyboard()
     )
 
 
