@@ -6,7 +6,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 
 BOT_TOKEN = "8883025545:AAE5VELjViC6hgJsS6VthwlWNt0LOW8QdjQ"
-APP_URL = https://inspiring-jalebi-d204c3.netlify.app/
+APP_URL = "https://inspiring-jalebi-d204c3.netlify.app/"
 PRICE = 129
 
 USED_CODES_FILE = "used_codes.json"
